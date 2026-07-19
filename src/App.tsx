@@ -25,6 +25,8 @@ import VolunteerApp from "./components/VolunteerApp";
 import StaffConsole from "./components/StaffConsole";
 import * as supabaseService from "./services/supabase";
 import * as dbService from "./services/db";
+import { useRealtimeTable } from "../hooks/useRealtimeTable";
+import { getSupabaseBrowserClient } from "../lib/supabase/client";
 
 export default function App() {
   // Navigation & Role Tabs
@@ -35,7 +37,7 @@ export default function App() {
   const [activeVenueId, setActiveVenueId] = useState<string>("v1");
   const [activeVenue, setActiveVenue] = useState<Venue | null>(null);
 
-  // Live entity states
+  // Live entity states (local fallback states)
   const [gates, setGates] = useState<Gate[]>([]);
   const [zones, setZones] = useState<Zone[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
@@ -50,10 +52,98 @@ export default function App() {
   const [dbLoading, setDbLoading] = useState<boolean>(true);
   const [systemAlertCount, setSystemAlertCount] = useState<number>(0);
 
+  // 1. Wire Realtime Subscriptions
+  const { rows: realtimeZones, status: zonesStatus } = useRealtimeTable<any>({
+    table: "zones",
+    filter: activeVenueId ? `venue_id=eq.${activeVenueId}` : undefined,
+  });
+
+  const { rows: realtimeHelpRequests } = useRealtimeTable<any>({
+    table: "help_requests",
+    filter: activeVenueId ? `venue_id=eq.${activeVenueId}` : undefined,
+  });
+
+  const { rows: realtimeIncidents } = useRealtimeTable<any>({
+    table: "incidents",
+    filter: activeVenueId ? `venue_id=eq.${activeVenueId}` : undefined,
+  });
+
+  const { rows: realtimeBroadcasts } = useRealtimeTable<any>({
+    table: "broadcasts",
+    filter: activeVenueId ? `venue_id=eq.${activeVenueId}` : undefined,
+  });
+
+  // Convert snake_case realtime rows to camelCase frontend objects
+  const mappedZones: Zone[] = realtimeZones.map((z: any) => ({
+    id: z.id,
+    venueId: z.venue_id,
+    name: z.name,
+    currentDensityPct: Number(z.current_density_pct ?? z.density_pct ?? 0),
+    history: z.history || [],
+  }));
+
+  const mappedHelpRequests: HelpRequest[] = realtimeHelpRequests.map((h: any) => ({
+    id: h.id,
+    userId: h.user_id,
+    venueId: h.venue_id,
+    zoneId: h.zone_id,
+    category: h.category,
+    status: h.status,
+    assignedVolunteerId: h.assigned_volunteer_id,
+    description: h.description,
+    urgency: h.urgency,
+    createdAt: h.created_at,
+  }));
+
+  const mappedIncidents: Incident[] = realtimeIncidents.map((i: any) => ({
+    id: i.id,
+    venueId: i.venue_id,
+    zoneId: i.zone_id,
+    type: i.type,
+    severity: i.severity,
+    status: i.status,
+    description: i.description,
+    reportedBy: i.reported_by,
+    createdAt: i.created_at,
+  }));
+
+  const mappedBroadcasts: Broadcast[] = realtimeBroadcasts.map((b: any) => ({
+    id: b.id,
+    venueId: b.venue_id,
+    severity: b.severity,
+    timestamp: b.timestamp,
+    original: b.original,
+    translations: b.translations,
+  }));
+
+  // Resolve final states preferring realtime data over REST fallback/mocks
+  const finalZones = mappedZones.length > 0 ? mappedZones : zones;
+  const finalHelpRequests = mappedHelpRequests.length > 0 ? mappedHelpRequests : helpRequests;
+  const finalIncidents = mappedIncidents.length > 0 ? mappedIncidents : incidents;
+  const finalBroadcasts = mappedBroadcasts.length > 0 ? mappedBroadcasts : broadcasts;
+
   // Fetch all venues
   const loadVenues = async () => {
     try {
-      const data = await dbService.fetchVenues();
+      let client;
+      try {
+        client = getSupabaseBrowserClient();
+      } catch (err) {
+        console.warn("Supabase client init failed, falling back to local Express venues", err);
+      }
+
+      let data = [];
+      if (client) {
+        const { data: dbVenuesData, error } = await client.from("venues").select("*");
+        if (!error && dbVenuesData && dbVenuesData.length > 0) {
+          data = dbVenuesData;
+        }
+      }
+
+      if (data.length === 0) {
+        data = await dbService.fetchVenues();
+      }
+
       setVenues(data);
       if (data.length > 0) {
         const defaultVenue = data.find((v: any) => v.id === activeVenueId) || data[0];
@@ -107,49 +197,25 @@ export default function App() {
         loadLiveState(activeVenueId);
       }, 5000);
 
-      // Phase 4: Supabase Realtime Subscriptions
-      // These will override local mock data as soon as real Supabase events occur.
-      const zonesSub = supabaseService.subscribeToZones((payload) => {
-        setZones((prev) => 
-          prev.map((z) => (z.id === (payload.new as any).id ? { ...z, ...payload.new } : z))
-        );
-      });
-
-      const incidentsSub = supabaseService.subscribeToIncidents((payload) => {
-        setIncidents((prev) => {
-          const exists = prev.find((i) => i.id === (payload.new as any).id);
-          if (exists) {
-            return prev.map((i) => (i.id === (payload.new as any).id ? { ...i, ...payload.new } : i));
-          }
-          return [payload.new as any, ...prev];
-        });
-      });
-
-      const helpRequestsSub = supabaseService.subscribeToHelpRequests((payload) => {
-        setHelpRequests((prev) => {
-          const exists = prev.find((h) => h.id === (payload.new as any).id);
-          if (exists) {
-            return prev.map((h) => (h.id === (payload.new as any).id ? { ...h, ...payload.new } : h));
-          }
-          return [payload.new as any, ...prev];
-        });
-      });
-
-      const crowdSnapshotsSub = supabaseService.subscribeToCrowdSnapshots((payload) => {
-        setZones((prev) => 
-          prev.map((z) => (z.id === (payload.new as any).zone_id ? { ...z, currentDensityPct: (payload.new as any).density_pct } : z))
-        );
-      });
-
       return () => {
         clearInterval(interval);
-        zonesSub.unsubscribe();
-        incidentsSub.unsubscribe();
-        helpRequestsSub.unsubscribe();
-        crowdSnapshotsSub.unsubscribe();
       };
     }
   }, [activeVenueId]);
+
+  // Sync alert count and broadcasts banner with live data
+  useEffect(() => {
+    const criticalCount = finalIncidents.filter((i) => i.status === "active").length;
+    setSystemAlertCount(criticalCount);
+
+    if (finalBroadcasts && finalBroadcasts.length > 0) {
+      setTickerMessage(`ANNOUNCEMENT: ${finalBroadcasts[0].original}`);
+    } else if (criticalCount > 0) {
+      setTickerMessage(`CRITICAL WARNING: ${finalIncidents[0].description}`);
+    } else {
+      setTickerMessage(`WORLD CUP 2026: SYSTEM HEALTH NOMINAL FOR ${(activeVenueId || "v1").toUpperCase()}`);
+    }
+  }, [finalIncidents, finalBroadcasts, activeVenueId]);
 
   // Handle active venue selection change
   const handleVenueChange = (venueId: string) => {
@@ -187,8 +253,12 @@ export default function App() {
             <div>
               <div className="flex items-center gap-1.5">
                 <h1 className="text-sm font-extrabold tracking-wider font-display text-chalk">SYNAPSE 26</h1>
-                <span className="flex items-center gap-1 text-[9px] text-live-amber font-mono bg-live-amber/10 px-1.5 py-0.5 rounded-sm border border-live-amber/30">
-                  <Wifi className="w-2.5 h-2.5 animate-pulse" /> ON AIR
+                <span className={`flex items-center gap-1 text-[9px] font-mono bg-live-amber/10 px-1.5 py-0.5 rounded-sm border border-live-amber/30 ${
+                  zonesStatus === 'online' ? 'text-emerald-400 border-emerald-400/30 bg-emerald-400/10' :
+                  zonesStatus === 'connecting' ? 'text-live-amber border-live-amber/30 bg-live-amber/10' :
+                  zonesStatus === 'error' ? 'text-alert-red border-alert-red/30 bg-alert-red/10' : 'text-slate-500 border-slate-800'
+                }`}>
+                  <Wifi className={`w-2.5 h-2.5 ${zonesStatus === 'connecting' ? 'animate-pulse' : ''}`} /> {zonesStatus.toUpperCase()}
                 </span>
               </div>
               <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
@@ -295,7 +365,7 @@ export default function App() {
             <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-extrabold block mb-1">STADIUM DENSITY</span>
             <span className="text-2xl font-black font-display tracking-widest text-live-amber block flex items-center gap-1.5">
               <Sliders className="w-5 h-5 text-live-amber" /> 
-              {(zones.reduce((sum, z) => sum + z.currentDensityPct, 0) / Math.max(1, zones.length)).toFixed(0)}% AVG
+              {(finalZones.reduce((sum, z) => sum + z.currentDensityPct, 0) / Math.max(1, finalZones.length)).toFixed(0)}% AVG
             </span>
           </div>
 
@@ -310,7 +380,7 @@ export default function App() {
           <div className="bg-slate-900 border border-slate-800 p-5 rounded-xl shadow-sm">
             <span className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-extrabold block mb-1">SUPPORT TICKETS</span>
             <span className="text-2xl font-black font-display tracking-widest text-signal-blue block">
-              {helpRequests.filter((h) => h.status !== "resolved").length}
+              {finalHelpRequests.filter((h) => h.status !== "resolved").length}
               <span className="text-sm tracking-normal text-slate-500 ml-2">ACTIVE DISPATCHES</span>
             </span>
           </div>
@@ -329,8 +399,8 @@ export default function App() {
                 <FanApp
                   venue={activeVenue}
                   gates={gates}
-                  zones={zones}
-                  broadcasts={broadcasts}
+                  zones={finalZones}
+                  broadcasts={finalBroadcasts}
                   matches={matches}
                   onRefresh={() => loadLiveState(activeVenueId)}
                 />
@@ -338,7 +408,7 @@ export default function App() {
               {activeRole === "volunteer" && (
                 <VolunteerApp
                   venue={activeVenue}
-                  helpRequests={helpRequests}
+                  helpRequests={finalHelpRequests}
                   onRefresh={() => loadLiveState(activeVenueId)}
                 />
               )}
@@ -346,10 +416,10 @@ export default function App() {
                 <StaffConsole
                   venue={activeVenue}
                   gates={gates}
-                  zones={zones}
-                  incidents={incidents}
-                  helpRequests={helpRequests}
-                  broadcasts={broadcasts}
+                  zones={finalZones}
+                  incidents={finalIncidents}
+                  helpRequests={finalHelpRequests}
+                  broadcasts={finalBroadcasts}
                   onRefresh={() => loadLiveState(activeVenueId)}
                 />
               )}

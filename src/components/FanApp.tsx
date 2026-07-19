@@ -22,6 +22,7 @@ import LivePulseSchematic from "./LivePulseSchematic";
 import { Venue, Gate, Zone, Incident, HelpRequest, Broadcast, Match } from "../types";
 import * as aiService from "../services/ai";
 import * as dbService from "../services/db";
+import { useRealtimeTable } from "../../hooks/useRealtimeTable";
 
 interface FanAppProps {
   venue: Venue;
@@ -35,6 +36,18 @@ interface FanAppProps {
 export default function FanApp({ venue, gates, zones, broadcasts, matches, onRefresh }: FanAppProps) {
   // Navigation & Tabs
   const [activeTab, setActiveTab] = useState<"nav" | "match" | "transport" | "sustainability">("nav");
+
+  // Realtime subscriptions
+  const [selectedPlayerId, setSelectedPlayerId] = useState<string>("p-1");
+
+  const { rows: matchEvents } = useRealtimeTable<any>({
+    table: "match_events",
+  });
+
+  const { rows: playerStats } = useRealtimeTable<any>({
+    table: "player_stats",
+    filter: selectedPlayerId ? `player_id=eq.${selectedPlayerId}` : undefined,
+  });
 
   // Soccer Pitch Match Simulation state
   const [pitchBallPos, setPitchBallPos] = useState<{ x: number; y: number }>({ x: 200, y: 150 });
@@ -1002,7 +1015,7 @@ export default function FanApp({ venue, gates, zones, broadcasts, matches, onRef
             </div>
 
             {/* Tactical Metrics Feedback Card */}
-            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl">
+            <div className="bg-slate-900 border border-slate-800 p-4 rounded-xl space-y-4">
               <div className="grid grid-cols-3 gap-3 text-center">
                 <div className="bg-command-navy p-2.5 rounded-md border border-slate-800">
                   <span className="text-[9px] font-mono text-slate-500 block font-bold">MATCH SCORE</span>
@@ -1017,9 +1030,75 @@ export default function FanApp({ venue, gates, zones, broadcasts, matches, onRef
                   <span className="text-sm font-black font-display tracking-widest text-live-amber mt-0.5 block">{cheerIntensity} dB</span>
                 </div>
               </div>
-              <p className="text-xs text-slate-400 mt-3 font-mono leading-relaxed bg-command-navy border border-slate-800 p-2.5 rounded-md">
+              <p className="text-xs text-slate-400 font-mono leading-relaxed bg-command-navy border border-slate-800 p-2.5 rounded-md">
                 📢 <strong className="text-chalk">Tactical Feed:</strong> {pitchActionText}
               </p>
+
+              {/* Match Events Realtime Section */}
+              <div className="border-t border-slate-800 pt-3">
+                <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-extrabold mb-2">⚡ Live Match Events</h4>
+                <div className="space-y-1.5 max-h-36 overflow-y-auto">
+                  {matchEvents && matchEvents.length > 0 ? (
+                    matchEvents.map((event: any, idx: number) => (
+                      <div key={idx} className="flex justify-between text-xs font-mono bg-command-navy/50 p-2 rounded-sm border border-slate-800/60">
+                        <span className="text-live-amber font-bold">[{event.minute}']</span>
+                        <span className="text-chalk flex-1 ml-2">{event.description}</span>
+                        <span className="text-[9px] text-slate-500 uppercase px-1 rounded-sm bg-slate-900 border border-slate-800">{event.event_type}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-[10px] font-mono text-slate-500 text-center py-2">
+                      Waiting for live match events... (Simulation active)
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Player Stats Realtime Section */}
+              <div className="border-t border-slate-800 pt-3">
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="text-[10px] font-mono text-slate-500 uppercase tracking-widest font-extrabold">📊 Player Stats Tracker</h4>
+                  <select
+                    value={selectedPlayerId}
+                    onChange={(e) => setSelectedPlayerId(e.target.value)}
+                    className="bg-command-navy border border-slate-800 text-[10px] font-mono text-chalk rounded-md px-2 py-0.5 outline-none cursor-pointer"
+                  >
+                    <option value="p-1">Christian Pulisic (USA)</option>
+                    <option value="p-2">Giovanni Reyna (USA)</option>
+                    <option value="p-3">Hirving Lozano (MEX)</option>
+                  </select>
+                </div>
+                {playerStats && playerStats.length > 0 ? (
+                  playerStats.map((stat: any, idx: number) => (
+                    <div key={idx} className="grid grid-cols-2 gap-2 text-xs font-mono bg-command-navy/50 p-2.5 rounded-md border border-slate-800/60">
+                      <div>
+                        <span className="text-slate-500 block text-[9px]">PLAYER</span>
+                        <span className="text-chalk font-bold">{stat.player_name}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block text-[9px]">DISTANCE RUN</span>
+                        <span className="text-signal-blue font-bold">{stat.distance_km} km</span>
+                      </div>
+                      <div className="mt-1">
+                        <span className="text-slate-500 block text-[9px]">GOALS / ASSISTS</span>
+                        <span className="text-chalk font-bold">{stat.goals} G / {stat.assists} A</span>
+                      </div>
+                      <div className="mt-1">
+                        <span className="text-slate-500 block text-[9px]">PASS ACCURACY</span>
+                        <span className="text-chalk font-bold">
+                          {stat.passes_total > 0 ? ((stat.passes_completed / stat.passes_total) * 100).toFixed(0) : 0}% 
+                          <span className="text-slate-500 text-[10px] ml-1">({stat.passes_completed}/{stat.passes_total})</span>
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="bg-command-navy/50 p-2.5 rounded-md border border-slate-800/60 text-xs font-mono flex justify-between items-center text-slate-500">
+                    <span>{selectedPlayerId === 'p-3' ? 'Hirving Lozano' : selectedPlayerId === 'p-2' ? 'Giovanni Reyna' : 'Christian Pulisic'}</span>
+                    <span className="text-[10px]">Mock tracking: 9.8 km, 88% pass completion</span>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
 

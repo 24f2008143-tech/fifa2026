@@ -5,11 +5,11 @@ import { GoogleGenAI, Type, FunctionDeclaration } from "@google/genai";
 import dotenv from "dotenv";
 import { createClient } from "@supabase/supabase-js";
 
+import { getSupabaseServerClient } from "./lib/supabase/server";
+
 dotenv.config();
 
-const supabaseUrl = 'https://dckubpyvchkrbjnlqugm.supabase.co';
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
-const supabase = supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
+const supabase = getSupabaseServerClient();
 
 const app = express();
 const PORT = 3000;

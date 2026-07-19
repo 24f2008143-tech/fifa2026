@@ -104,3 +104,39 @@ CREATE TABLE IF NOT EXISTS public.copilot_suggestions (
 alter publication supabase_realtime add table public.help_requests;
 alter publication supabase_realtime add table public.incidents;
 alter publication supabase_realtime add table public.zones;
+
+-- Create MatchEvents table
+CREATE TABLE IF NOT EXISTS public.match_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    match_id TEXT NOT NULL,
+    event_type TEXT NOT NULL,
+    minute INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+-- Create PlayerStats table
+CREATE TABLE IF NOT EXISTS public.player_stats (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    player_id TEXT NOT NULL,
+    player_name TEXT NOT NULL,
+    goals INTEGER NOT NULL DEFAULT 0,
+    assists INTEGER NOT NULL DEFAULT 0,
+    passes_completed INTEGER NOT NULL DEFAULT 0,
+    passes_total INTEGER NOT NULL DEFAULT 0,
+    distance_km NUMERIC(4,2) NOT NULL DEFAULT 0.0,
+    created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT now()
+);
+
+-- Enable RLS
+ALTER TABLE public.match_events ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.player_stats ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for public SELECT
+CREATE POLICY "Allow public select on match_events" ON public.match_events FOR SELECT USING (true);
+CREATE POLICY "Allow public select on player_stats" ON public.player_stats FOR SELECT USING (true);
+
+-- Add to realtime publication
+alter publication supabase_realtime add table public.match_events;
+alter publication supabase_realtime add table public.player_stats;
+
