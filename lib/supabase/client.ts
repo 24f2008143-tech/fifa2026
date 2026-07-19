@@ -10,13 +10,13 @@ let browserClient: SupabaseClient | null = null;
 export function getSupabaseBrowserClient(): SupabaseClient {
   if (browserClient) return browserClient;
 
-  const url = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) || (import.meta.env && import.meta.env.VITE_SUPABASE_URL);
+  const url = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_URL) || (import.meta.env && import.meta.env.VITE_SUPABASE_URL) || 'https://dckubpyvchkrbjnlqugm.supabase.co';
   const anonKey = (typeof process !== 'undefined' && process.env?.NEXT_PUBLIC_SUPABASE_ANON_KEY) || (import.meta.env && import.meta.env.VITE_SUPABASE_ANON_KEY);
 
-  if (!url || !anonKey) {
+  if (!anonKey) {
     throw new Error(
-      'Missing SUPABASE_URL or SUPABASE_ANON_KEY. ' +
-        'Set NEXT_PUBLIC_SUPABASE_URL/ANON_KEY or VITE_SUPABASE_URL/ANON_KEY in your env.'
+      'Missing SUPABASE_ANON_KEY. ' +
+        'Set NEXT_PUBLIC_SUPABASE_ANON_KEY or VITE_SUPABASE_ANON_KEY in your env.'
     );
   }
 
