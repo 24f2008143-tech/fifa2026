@@ -1,0 +1,6 @@
+{
+  "name": "Synapse 26",
+  "description": "FIFA World Cup 2026 stadium-operations platform with a Fan Companion, Volunteer Ops, and Command Center with server-side Gemini assistants.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

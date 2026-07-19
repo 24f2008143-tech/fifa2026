@@ -1,0 +1,63 @@
+@import url('https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@400;700;800;900&family=Inter:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Big Shoulders Display", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-pitch: #0B3D2E;
+  --color-command-navy: #0A0E1A;
+  --color-live-amber: #FF9F1C;
+  --color-alert-red: #E63946;
+  --color-signal-blue: #4CC9F0;
+  --color-chalk: #F4F6F0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-command-navy);
+  color: var(--color-chalk);
+  overflow-x: hidden;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: var(--color-command-navy);
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-pitch);
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-signal-blue);
+}
+
+@keyframes ticker {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+.animate-ticker {
+  animation: ticker 20s linear infinite;
+}
+
+@keyframes svg-pulse {
+  0% {
+    opacity: 0.3;
+    stroke-width: 1;
+  }
+  50% {
+    opacity: 0.8;
+    stroke-width: 3;
+  }
+  100% {
+    opacity: 0.3;
+    stroke-width: 1;
+  }
+}
+.animate-svg-pulse {
+  animation: svg-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
