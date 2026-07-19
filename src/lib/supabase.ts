@@ -4,7 +4,17 @@ const supabaseUrl = 'https://dckubpyvchkrbjnlqugm.supabase.co'
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 
 if (!supabaseKey) {
-  throw new Error('Missing VITE_SUPABASE_ANON_KEY in environment variables')
+  console.warn('Missing VITE_SUPABASE_ANON_KEY in environment variables. Realtime database updates will be disabled.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey)
+export const supabase = supabaseKey
+  ? createClient(supabaseUrl, supabaseKey)
+  : {
+      channel: () => ({
+        on: () => ({
+          subscribe: () => ({})
+        })
+      }),
+      removeChannel: () => {}
+    } as any
+
