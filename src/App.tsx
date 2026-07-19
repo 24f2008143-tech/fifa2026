@@ -28,6 +28,25 @@ import * as dbService from "./services/db";
 import { useRealtimeTable } from "../hooks/useRealtimeTable";
 import { getSupabaseBrowserClient } from "../lib/supabase/client";
 
+const FALLBACK_VENUES = [
+  { id: "v1", name: "MetLife Stadium", city: "East Rutherford", country: "USA", capacity: 82500 },
+  { id: "v2", name: "AT&T Stadium", city: "Arlington", country: "USA", capacity: 80000 },
+  { id: "v3", name: "SoFi Stadium", city: "Inglewood", country: "USA", capacity: 70240 },
+  { id: "v4", name: "Levi's Stadium", city: "Santa Clara", country: "USA", capacity: 68500 },
+  { id: "v5", name: "Lumen Field", city: "Seattle", country: "USA", capacity: 69000 },
+  { id: "v6", name: "Arrowhead Stadium", city: "Kansas City", country: "USA", capacity: 76416 },
+  { id: "v7", name: "NRG Stadium", city: "Houston", country: "USA", capacity: 72220 },
+  { id: "v8", name: "Mercedes-Benz Stadium", city: "Atlanta", country: "USA", capacity: 71000 },
+  { id: "v9", name: "Hard Rock Stadium", city: "Miami Gardens", country: "USA", capacity: 64767 },
+  { id: "v10", name: "Lincoln Financial Field", city: "Philadelphia", country: "USA", capacity: 69796 },
+  { id: "v11", name: "Gillette Stadium", city: "Foxborough", country: "USA", capacity: 65878 },
+  { id: "v12", name: "Estadio Azteca", city: "Mexico City", country: "Mexico", capacity: 87523 },
+  { id: "v13", name: "Estadio Akron", city: "Guadalajara", country: "Mexico", capacity: 48071 },
+  { id: "v14", name: "Estadio BBVA", city: "Monterrey", country: "Mexico", capacity: 53500 },
+  { id: "v15", name: "BC Place", city: "Vancouver", country: "Canada", capacity: 54500 },
+  { id: "v16", name: "BMO Field", city: "Toronto", country: "Canada", capacity: 30000 },
+];
+
 export default function App() {
   // Navigation & Role Tabs
   const [activeRole, setActiveRole] = useState<"fan" | "volunteer" | "staff">("fan");
@@ -141,7 +160,12 @@ export default function App() {
       }
 
       if (data.length === 0) {
-        data = await dbService.fetchVenues();
+        try {
+          data = await dbService.fetchVenues();
+        } catch (e) {
+          console.warn("Express API failed, using hardcoded fallback venues", e);
+          data = FALLBACK_VENUES;
+        }
       }
 
       setVenues(data);
@@ -151,6 +175,8 @@ export default function App() {
       }
     } catch (e) {
       console.error("Error fetching venues", e);
+      setVenues(FALLBACK_VENUES);
+      setActiveVenue(FALLBACK_VENUES[0]);
     }
   };
 
